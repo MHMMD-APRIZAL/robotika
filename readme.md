@@ -38,16 +38,16 @@ Gunakan slider untuk mengatur kecepatan mobil sesuai keinginan.
 Jika menggunakan driver motor L9110S (dengan pin A-1A/A-1B dan B-1A/B-1B), hubungkan sebagai berikut:
 
 ### Diagram Koneksi
-ESP32 → L9110S Motor Driver
+ESP32 Wemos D1 Mini → L 298 N Motor Driver
 
-| ESP32 Wemos D1 Mini |  L298 N Pin |                       Fungsi                     |
-|---------------------|-------------|--------------------------------------------------|
-| D2                  | A-1A        | Motor kiri - kontrol arah 1                      |
-| D3                  | A-1B        | Motor kiri - kontrol arah 2                      |
-| D6                  | B-1A        | Motor kanan - kontrol arah 1                     |
-| D7                  | B-1B        | Motor kanan - kontrol arah 2                     |
-| GND                 | GND         | referensi tegangan/sinyal drivers dan clntroller.|
-| 5V                  | UCC         | supply Energi motor                              |
+| ESP32 Wemos D1 Mini |  L 298 N Pin |                       Fungsi                     |
+|---------------------|--------------|--------------------------------------------------|
+| D2                  | A-1A         | Motor kiri - kontrol arah 1                      |
+| D3                  | A-1B         | Motor kiri - kontrol arah 2                      |
+| D6                  | B-1A         | Motor kanan - kontrol arah 1                     |
+| D7                  | B-1B         | Motor kanan - kontrol arah 2                     |
+| GND                 | GND          | referensi tegangan/sinyal drivers dan clntroller.|
+| 5V                  | UCC         |  supply Energi motor                              |
 
 
 **Catatan:** Abaikan pin ENA/ENB pada L9110S (tidak ada). Untuk kontrol kecepatan, gunakan PWM pada GPIO25 untuk motor kiri dan GPIO33 untuk motor kanan.
