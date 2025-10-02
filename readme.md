@@ -18,8 +18,8 @@ Nyalakan driver dan motor dengan baterai/power pack terpisah. Pastikan untuk men
 
 Dari ponsel atau laptop, sambungkan ke jaringan Wi-Fi yang dipancarkan ESP32:
 
-- SSID: **ESP32-Car**
-- Password: **12345678**
+- SSID: **KelompokKeren**
+- Password: **Kelompok1**
 
 ### 4. Akses Kontrol Web
 
@@ -40,12 +40,15 @@ Jika menggunakan driver motor L9110S (dengan pin A-1A/A-1B dan B-1A/B-1B), hubun
 ### Diagram Koneksi
 ESP32 → L9110S Motor Driver
 
-| ESP32 GPIO | L9110S Pin | Fungsi |
-|------------|------------|--------|
-| 26         | A-1A       | Motor kiri - kontrol arah 1 |
-| 27         | A-1B       | Motor kiri - kontrol arah 2 |
-| 32         | B-1A       | Motor kanan - kontrol arah 1 |
-| 14         | B-1B       | Motor kanan - kontrol arah 2 |
+| ESP32 Wemos D1 Mini |  L298 N Pin |                       Fungsi                     |
+|---------------------|-------------|--------------------------------------------------|
+| D2                  | A-1A        | Motor kiri - kontrol arah 1                      |
+| D3                  | A-1B        | Motor kiri - kontrol arah 2                      |
+| D6                  | B-1A        | Motor kanan - kontrol arah 1                     |
+| D7                  | B-1B        | Motor kanan - kontrol arah 2                     |
+| GND                 | GND         | referensi tegangan/sinyal drivers dan clntroller.|
+| 5V                  | UCC         | supply Energi motor                              |
+
 
 **Catatan:** Abaikan pin ENA/ENB pada L9110S (tidak ada). Untuk kontrol kecepatan, gunakan PWM pada GPIO25 untuk motor kiri dan GPIO33 untuk motor kanan.
 
