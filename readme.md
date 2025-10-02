@@ -83,3 +83,4 @@ Hubungi developer untuk mendapatkan varian dengan fitur-fitur tersebut.
 ---
 
 © 2023 ESP32 Car Controller Project | Dokumentasi ini diperbarui terakhir pada 15 September 2023
+[![Demo Robot Sumo](https://img.youtube.com/vi/H3NRTBzPfW8/0.jpg)](https://youtu.be/H3NRTBzPfW8)
