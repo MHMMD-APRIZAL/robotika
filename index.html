@@ -490,6 +490,10 @@
         <div class="label">Warna Dominan</div>
         <div class="value" id="dominantColor" style="font-size: 1rem;">—</div>
       </div>
+      <div class="stat-card">
+        <div class="label">Estimasi Jarak</div>
+        <div class="value" id="distanceValue" style="font-size: 1.3rem;">—</div>
+      </div>
     </div>
     
     <!-- Main Content -->
@@ -707,6 +711,127 @@
     }
     
     // ============================================
+    // DISTANCE ESTIMATION FUNCTIONS
+    // ============================================
+    
+    // Database ukuran rata-rata objek dalam dunia nyata (dalam cm)
+    const OBJECT_REAL_SIZES = {
+      'person': 170,        // tinggi rata-rata manusia
+      'car': 450,           // panjang mobil
+      'motorcycle': 200,    // panjang motor
+      'bicycle': 180,       // panjang sepeda
+      'bus': 1200,          // panjang bus
+      'truck': 800,         // panjang truk
+      'bottle': 25,         // tinggi botol
+      'cup': 10,            // tinggi gelas
+      'chair': 90,          // tinggi kursi
+      'couch': 200,         // panjang sofa
+      'dining table': 180,  // panjang meja makan
+      'laptop': 35,         // lebar laptop
+      'keyboard': 45,       // panjang keyboard
+      'mouse': 10,          // panjang mouse
+      'cell phone': 15,     // tinggi HP
+      'book': 23,           // tinggi buku
+      'clock': 30,          // diameter jam dinding
+      'tv': 120,            // lebar TV
+      'potted plant': 40,   // tinggi pot tanaman
+      'vase': 30,           // tinggi vas
+      'backpack': 45,       // tinggi ransel
+      'handbag': 35,        // tinggi tas
+      'suitcase': 70,       // tinggi koper
+      'dog': 60,            // tinggi anjing
+      'cat': 25,            // tinggi kucing
+      'bird': 15,           // tinggi burung
+      'apple': 8,           // diameter apel
+      'orange': 8,          // diameter jeruk
+      'banana': 20,         // panjang pisang
+      'scissors': 20,       // panjang gunting
+      'teddy bear': 40,     // tinggi boneka teddy
+      'tennis racket': 68,  // panjang raket tenis
+      'sports ball': 22,    // diameter bola
+    };
+    
+    // Focal length estimasi (dalam pixel) - akan di-kalibrasi otomatis
+    let FOCAL_LENGTH = 600; // default, akan disesuaikan
+    
+    function estimateDistance(predictions) {
+      if (predictions.length === 0) {
+        distanceValueEl.innerHTML = '—';
+        return null;
+      }
+      
+      // Ambil objek terbesar
+      const largestObject = predictions.reduce((prev, current) => {
+        const prevArea = prev.bbox[2] * prev.bbox[3];
+        const currentArea = current.bbox[2] * current.bbox[3];
+        return currentArea > prevArea ? current : prev;
+      });
+      
+      const objectClass = largestObject.class;
+      const [x, y, width, height] = largestObject.bbox;
+      
+      // Cek apakah objek ini ada di database
+      if (!OBJECT_REAL_SIZES[objectClass]) {
+        distanceValueEl.innerHTML = '<span style="font-size: 0.9rem;">Tidak tersedia</span>';
+        return null;
+      }
+      
+      const realSize = OBJECT_REAL_SIZES[objectClass]; // dalam cm
+      
+      // Gunakan dimensi yang lebih besar (width atau height)
+      const pixelSize = Math.max(width, height);
+      
+      // Auto-kalibrasi focal length berdasarkan resolusi video
+      const videoWidth = canvas.width;
+      FOCAL_LENGTH = videoWidth * 0.7; // estimasi focal length
+      
+      // Formula: Distance = (Real_Size × Focal_Length) / Pixel_Size
+      const distanceCm = (realSize * FOCAL_LENGTH) / pixelSize;
+      const distanceM = distanceCm / 100;
+      
+      // Format output berdasarkan jarak
+      let displayText;
+      let distanceClass;
+      
+      if (distanceM < 0.5) {
+        displayText = `${distanceCm.toFixed(0)} cm`;
+        distanceClass = 'Sangat Dekat';
+      } else if (distanceM < 2) {
+        displayText = `${distanceM.toFixed(2)} m`;
+        distanceClass = 'Dekat';
+      } else if (distanceM < 5) {
+        displayText = `${distanceM.toFixed(1)} m`;
+        distanceClass = 'Sedang';
+      } else if (distanceM < 10) {
+        displayText = `${distanceM.toFixed(1)} m`;
+        distanceClass = 'Jauh';
+      } else {
+        displayText = `${distanceM.toFixed(0)} m`;
+        distanceClass = 'Sangat Jauh';
+      }
+      
+      // Update display dengan icon
+      const icon = getDistanceIcon(distanceM);
+      distanceValueEl.innerHTML = `${icon} ${displayText}<br><span style="font-size: 0.7rem; opacity: 0.8;">${distanceClass}</span>`;
+      
+      return {
+        distanceCm,
+        distanceM,
+        distanceClass,
+        displayText,
+        objectClass
+      };
+    }
+    
+    function getDistanceIcon(distanceM) {
+      if (distanceM < 0.5) return '🔴';      // Sangat dekat
+      if (distanceM < 2) return '🟠';        // Dekat
+      if (distanceM < 5) return '🟡';        // Sedang
+      if (distanceM < 10) return '🟢';       // Jauh
+      return '🔵';                            // Sangat jauh
+    }
+    
+    // ============================================
     // CONFIGURATION & GLOBAL VARIABLES
     // ============================================
     let model = null;
@@ -744,6 +869,7 @@
     const objectCount = document.getElementById('objectCount');
     const totalDetectionsEl = document.getElementById('totalDetections');
     const dominantColorEl = document.getElementById('dominantColor');
+    const distanceValueEl = document.getElementById('distanceValue');
     const logContainer = document.getElementById('logContainer');
     const thresholdSlider = document.getElementById('thresholdSlider');
     const thresholdValue = document.getElementById('thresholdValue');
@@ -847,11 +973,14 @@
         // Detect dominant color
         const colorInfo = detectDominantColor(filteredPredictions);
         
+        // Estimate distance
+        const distanceInfo = estimateDistance(filteredPredictions);
+        
         // Update stats
         updateStats(filteredPredictions);
         
-        // Log detections with color
-        logDetections(filteredPredictions, colorInfo);
+        // Log detections with color and distance
+        logDetections(filteredPredictions, colorInfo, distanceInfo);
         
         // Calculate FPS
         calculateFPS();
@@ -891,10 +1020,26 @@
         drawRoundedRect(ctx, x, y, width, height, 10);
         ctx.stroke();
         
-        // Prepare label
+        // Prepare label dengan estimasi jarak
         const label = `${prediction.class}`;
         const confidence = `${(prediction.score * 100).toFixed(1)}%`;
-        const text = `${label} ${confidence}`;
+        
+        // Estimasi jarak untuk objek ini
+        let distanceText = '';
+        if (OBJECT_REAL_SIZES[prediction.class]) {
+          const realSize = OBJECT_REAL_SIZES[prediction.class];
+          const pixelSize = Math.max(width, height);
+          const distanceCm = (realSize * FOCAL_LENGTH) / pixelSize;
+          const distanceM = distanceCm / 100;
+          
+          if (distanceM < 1) {
+            distanceText = ` • ${distanceCm.toFixed(0)}cm`;
+          } else {
+            distanceText = ` • ${distanceM.toFixed(1)}m`;
+          }
+        }
+        
+        const text = `${label} ${confidence}${distanceText}`;
         
         // Measure text
         const textMetrics = ctx.measureText(text);
@@ -991,7 +1136,7 @@
       }
     }
     
-    function logDetections(predictions, colorInfo) {
+    function logDetections(predictions, colorInfo, distanceInfo) {
       if (predictions.length === 0) return;
       
       predictions.forEach(pred => {
@@ -1003,7 +1148,9 @@
           score: pred.score,
           timestamp: new Date().toLocaleTimeString('id-ID'),
           color: colorInfo ? colorInfo.name : '—',
-          rgb: colorInfo ? colorInfo.rgb : null
+          rgb: colorInfo ? colorInfo.rgb : null,
+          distance: distanceInfo ? distanceInfo.displayText : '—',
+          distanceClass: distanceInfo ? distanceInfo.distanceClass : null
         };
         
         detectionLog.unshift(logItem);
@@ -1031,6 +1178,7 @@
             <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: ${item.rgb}; margin-right: 5px; border: 1px solid rgba(255,255,255,0.3); vertical-align: middle;"></span>
             Warna: ${item.color}
           </div>` : ''}
+          ${item.distance ? `<div class="confidence">📏 Jarak: ${item.distance} <span style="opacity: 0.7;">(${item.distanceClass})</span></div>` : ''}
           <div class="timestamp">${item.timestamp}</div>
         </div>
       `).join('');
