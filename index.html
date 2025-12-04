@@ -486,6 +486,10 @@
         <div class="label">Total Deteksi</div>
         <div class="value" id="totalDetections">0</div>
       </div>
+      <div class="stat-card">
+        <div class="label">Warna Dominan</div>
+        <div class="value" id="dominantColor" style="font-size: 1rem;">—</div>
+      </div>
     </div>
     
     <!-- Main Content -->
@@ -525,6 +529,184 @@
 
   <script>
     // ============================================
+    // COLOR DETECTION FUNCTIONS
+    // ============================================
+    function detectDominantColor(predictions) {
+      if (predictions.length === 0) {
+        dominantColorEl.innerHTML = '—';
+        dominantColorEl.style.background = 'transparent';
+        return null;
+      }
+      
+      // Get the largest object for color detection
+      const largestObject = predictions.reduce((prev, current) => {
+        const prevArea = prev.bbox[2] * prev.bbox[3];
+        const currentArea = current.bbox[2] * current.bbox[3];
+        return currentArea > prevArea ? current : prev;
+      });
+      
+      const [x, y, width, height] = largestObject.bbox;
+      
+      // Create temporary canvas untuk sampling dari video langsung
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCanvas.width = width;
+      tempCanvas.height = height;
+      
+      // Draw dari video, bukan dari canvas yang sudah ada drawing
+      tempCtx.drawImage(webcam, x, y, width, height, 0, 0, width, height);
+      
+      // Sample pixels from center area (avoid edges)
+      const margin = Math.min(width, height) * 0.1; // 10% margin dari tepi
+      const sampleX = Math.floor(margin);
+      const sampleY = Math.floor(margin);
+      const sampleWidth = Math.floor(width - margin * 2);
+      const sampleHeight = Math.floor(height - margin * 2);
+      
+      const imageData = tempCtx.getImageData(sampleX, sampleY, sampleWidth, sampleHeight);
+      const pixels = imageData.data;
+      
+      // Gunakan histogram untuk color quantization yang lebih akurat
+      const colorBuckets = {};
+      
+      // Sample setiap 16 pixel (lebih banyak sample untuk akurasi)
+      for (let i = 0; i < pixels.length; i += 16) {
+        const r = Math.floor(pixels[i] / 32) * 32; // Quantize ke 32-step
+        const g = Math.floor(pixels[i + 1] / 32) * 32;
+        const b = Math.floor(pixels[i + 2] / 32) * 32;
+        const alpha = pixels[i + 3];
+        
+        // Skip transparent pixels
+        if (alpha < 128) continue;
+        
+        const key = `${r},${g},${b}`;
+        colorBuckets[key] = (colorBuckets[key] || 0) + 1;
+      }
+      
+      // Find most frequent color
+      let maxCount = 0;
+      let dominantRGB = [0, 0, 0];
+      
+      for (const [key, count] of Object.entries(colorBuckets)) {
+        if (count > maxCount) {
+          maxCount = count;
+          dominantRGB = key.split(',').map(Number);
+        }
+      }
+      
+      const [r, g, b] = dominantRGB;
+      
+      // Get color name dengan algoritma HSV yang lebih akurat
+      const colorName = getColorName(r, g, b);
+      const rgbColor = `rgb(${r}, ${g}, ${b})`;
+      
+      // Update display
+      dominantColorEl.innerHTML = `<span style="display: inline-block; width: 20px; height: 20px; border-radius: 50%; background: ${rgbColor}; margin-right: 8px; border: 2px solid white; vertical-align: middle; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"></span>${colorName}`;
+      
+      return { r, g, b, name: colorName, rgb: rgbColor };
+    }
+    
+    function getColorName(r, g, b) {
+      // Convert RGB to HSV untuk deteksi warna yang lebih akurat
+      const rNorm = r / 255;
+      const gNorm = g / 255;
+      const bNorm = b / 255;
+      
+      const max = Math.max(rNorm, gNorm, bNorm);
+      const min = Math.min(rNorm, gNorm, bNorm);
+      const diff = max - min;
+      
+      // Calculate HSV
+      let h = 0;
+      const s = max === 0 ? 0 : diff / max;
+      const v = max;
+      
+      if (diff !== 0) {
+        if (max === rNorm) {
+          h = 60 * (((gNorm - bNorm) / diff) % 6);
+        } else if (max === gNorm) {
+          h = 60 * (((bNorm - rNorm) / diff) + 2);
+        } else {
+          h = 60 * (((rNorm - gNorm) / diff) + 4);
+        }
+      }
+      
+      if (h < 0) h += 360;
+      
+      // Deteksi warna berdasarkan HSV
+      // Cek achromatic (hitam, putih, abu-abu)
+      if (s < 0.15) {
+        if (v < 0.2) return 'Hitam';
+        if (v < 0.35) return 'Abu Gelap';
+        if (v < 0.65) return 'Abu-abu';
+        if (v < 0.85) return 'Abu Terang';
+        return 'Putih';
+      }
+      
+      // Deteksi warna berdasarkan Hue dengan threshold lebih presisi
+      if (v < 0.25) return 'Hitam'; // Warna gelap sekali
+      
+      // Merah: 0-15 dan 345-360
+      if (h < 15 || h >= 345) {
+        if (s > 0.6 && v > 0.5) return 'Merah';
+        return 'Merah Muda';
+      }
+      
+      // Oranye: 15-45
+      if (h >= 15 && h < 45) {
+        if (v > 0.6) return 'Oranye';
+        return 'Coklat';
+      }
+      
+      // Kuning: 45-70
+      if (h >= 45 && h < 70) {
+        if (s > 0.5 && v > 0.6) return 'Kuning';
+        if (v < 0.5) return 'Coklat Muda';
+        return 'Krem';
+      }
+      
+      // Hijau Kuning: 70-80
+      if (h >= 70 && h < 80) {
+        return 'Hijau Kuning';
+      }
+      
+      // Hijau: 80-150
+      if (h >= 80 && h < 150) {
+        if (s > 0.5 && v > 0.5) return 'Hijau';
+        if (v > 0.6) return 'Hijau Terang';
+        return 'Hijau Gelap';
+      }
+      
+      // Cyan/Tosca: 150-190
+      if (h >= 150 && h < 190) {
+        if (v > 0.6) return 'Cyan';
+        return 'Tosca';
+      }
+      
+      // Biru: 190-250
+      if (h >= 190 && h < 250) {
+        if (s > 0.6 && v > 0.5) return 'Biru';
+        if (v > 0.6) return 'Biru Muda';
+        return 'Biru Tua';
+      }
+      
+      // Ungu/Violet: 250-290
+      if (h >= 250 && h < 290) {
+        if (s > 0.5) return 'Ungu';
+        return 'Lavender';
+      }
+      
+      // Magenta/Pink: 290-345
+      if (h >= 290 && h < 345) {
+        if (s > 0.6 && v > 0.5) return 'Magenta';
+        if (v > 0.6) return 'Pink';
+        return 'Ungu Tua';
+      }
+      
+      return 'Warna Campuran';
+    }
+    
+    // ============================================
     // CONFIGURATION & GLOBAL VARIABLES
     // ============================================
     let model = null;
@@ -561,6 +743,7 @@
     const fpsValue = document.getElementById('fpsValue');
     const objectCount = document.getElementById('objectCount');
     const totalDetectionsEl = document.getElementById('totalDetections');
+    const dominantColorEl = document.getElementById('dominantColor');
     const logContainer = document.getElementById('logContainer');
     const thresholdSlider = document.getElementById('thresholdSlider');
     const thresholdValue = document.getElementById('thresholdValue');
@@ -661,11 +844,14 @@
         // Draw results
         drawPredictions(filteredPredictions);
         
+        // Detect dominant color
+        const colorInfo = detectDominantColor(filteredPredictions);
+        
         // Update stats
         updateStats(filteredPredictions);
         
-        // Log detections
-        logDetections(filteredPredictions);
+        // Log detections with color
+        logDetections(filteredPredictions, colorInfo);
         
         // Calculate FPS
         calculateFPS();
@@ -805,7 +991,7 @@
       }
     }
     
-    function logDetections(predictions) {
+    function logDetections(predictions, colorInfo) {
       if (predictions.length === 0) return;
       
       predictions.forEach(pred => {
@@ -815,7 +1001,9 @@
         const logItem = {
           class: pred.class,
           score: pred.score,
-          timestamp: new Date().toLocaleTimeString('id-ID')
+          timestamp: new Date().toLocaleTimeString('id-ID'),
+          color: colorInfo ? colorInfo.name : '—',
+          rgb: colorInfo ? colorInfo.rgb : null
         };
         
         detectionLog.unshift(logItem);
@@ -839,6 +1027,10 @@
         <div class="log-item">
           <div class="object-name">${item.class}</div>
           <div class="confidence">Confidence: ${(item.score * 100).toFixed(1)}%</div>
+          ${item.color ? `<div class="confidence">
+            <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: ${item.rgb}; margin-right: 5px; border: 1px solid rgba(255,255,255,0.3); vertical-align: middle;"></span>
+            Warna: ${item.color}
+          </div>` : ''}
           <div class="timestamp">${item.timestamp}</div>
         </div>
       `).join('');
